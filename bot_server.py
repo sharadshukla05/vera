@@ -18,6 +18,7 @@ Configure LLM via environment variables:
 """
 
 import json
+import os
 import sys
 import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -30,7 +31,7 @@ from urllib.parse import urlparse
 # ─────────────────────────────────────────────────────────────────────────────
 
 HOST = "0.0.0.0"
-PORT = 8080
+PORT = int(os.environ.get("PORT", 8080))
 TEAM_NAME = "ShortlistMe"
 BOT_VERSION = "1.0.0"
 
