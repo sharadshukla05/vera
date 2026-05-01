@@ -1,3 +1,12 @@
+---
+title: Vera Merchant AI
+emoji: 🚀
+colorFrom: blue
+colorTo: green
+sdk: docker
+pinned: false
+---
+
 # Vera — magicpin AI Challenge Submission
 
 **Team:** ShortlistMe  
