@@ -24,7 +24,7 @@ TIMEOUT = 45  # seconds
 
 # Provider defaults
 DEFAULTS = {
-    "gemini":    "gemini-1.5-flash",
+    "gemini":    "gemini-2.5-flash",
     "openai":    "gpt-4o-mini",
     "anthropic": "claude-3-5-haiku-20241022",
     "groq":      "llama-3.1-70b-versatile",

@@ -125,7 +125,7 @@ def _compose_for_trigger(trigger_id: str) -> Optional[dict]:
         return None
 
     elapsed = (time.time() - start) * 1000
-    print(f"  [OK] {trigger_id[:40]} → {len(result.get('body',''))} chars ({elapsed:.0f}ms)", flush=True)
+    print(f"  [OK] {trigger_id[:40]} -> {len(result.get('body',''))} chars ({elapsed:.0f}ms)", flush=True)
 
     return {
         "trigger_id": trigger_id,
@@ -164,8 +164,12 @@ class VeraHandler(BaseHTTPRequestHandler):
         elif path == "/v1/metadata":
             _json_response(self, 200, {
                 "team_name": TEAM_NAME,
+                "team_members": ["ShortlistMe"],
                 "model": llm_client.provider_name(),
+                "approach": "4-context signal-scorer with per-trigger strategy routing and multi-turn intent detection",
+                "contact_email": "team@shortlistme.ai",
                 "version": BOT_VERSION,
+                "submitted_at": "2026-05-03T08:00:00Z",
                 "features": ["compose", "multi_turn", "auto_reply_detection", "intent_routing"],
             })
 
@@ -248,9 +252,19 @@ class VeraHandler(BaseHTTPRequestHandler):
             cat_slug = merchant.get("category_slug", "")
             if cat_slug in contexts["category"]:
                 state.context_cache["category"] = contexts["category"][cat_slug]
+                
+        if customer_id and customer_id in contexts["customer"]:
+            state.context_cache["customer"] = contexts["customer"][customer_id]
+
+        from_role = body.get("from_role", "merchant")
+
+        # Auto-infer from_role: if customer_id is present in request and
+        # customer context exists, treat as customer regardless of from_role
+        if customer_id and customer_id in contexts["customer"]:
+            from_role = "customer"
 
         # Get the response
-        result = respond(state, message)
+        result = respond(state, message, from_role)
         state.last_bot_body = result.get("body", "")
 
         print(f"[REPLY] action={result.get('action')} body=\"{result.get('body','')[:60]}\"", flush=True)

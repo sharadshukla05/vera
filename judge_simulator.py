@@ -1,3 +1,22 @@
+import os
+import sys
+import json
+import time
+import re
+import socket
+from datetime import datetime
+from dataclasses import dataclass, field
+from typing import Optional, List, Dict, Any, Tuple
+from pathlib import Path
+from urllib import request as urlrequest, error as urlerror
+from abc import ABC, abstractmethod
+
+# Force UTF-8 output on Windows to avoid emoji encoding crashes
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+if hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+
 #!/usr/bin/env python3
 """
 magicpin AI Challenge — LLM-Powered Judge Simulator
@@ -24,10 +43,10 @@ Author: magicpin AI Challenge Team
 BOT_URL = "http://localhost:8080"
 
 # Choose your LLM provider: "openai", "anthropic", "gemini", "deepseek", "groq", "ollama", "openrouter"
-LLM_PROVIDER = "openai"
+LLM_PROVIDER = "gemini"
 
 # Your API key (paste your key here)
-LLM_API_KEY = ""  # <-- PUT YOUR API KEY HERE
+LLM_API_KEY = os.environ.get("LLM_API_KEY", "")  # <-- PUT YOUR API KEY HERE
 
 # Model to use (leave empty for default, or specify like "gpt-4o", "claude-3-5-sonnet-20241022", etc.)
 LLM_MODEL = ""  # <-- Optional: specify model or leave empty for default
@@ -41,19 +60,6 @@ TEST_SCENARIO = "all"
 # =============================================================================
 # ██████  END OF CONFIGURATION - DON'T EDIT BELOW THIS LINE ██████
 # =============================================================================
-
-import os
-import sys
-import json
-import time
-import re
-import socket
-from datetime import datetime
-from dataclasses import dataclass, field
-from typing import Optional, List, Dict, Any, Tuple
-from pathlib import Path
-from urllib import request as urlrequest, error as urlerror
-from abc import ABC, abstractmethod
 
 # Constants
 TIMEOUT_LLM = 45
@@ -99,10 +105,11 @@ def print_llm(text: str):
     print(f"{Colors.MAGENTA}[LLM]{Colors.RESET} {text}")
 
 def print_score_bar(dimension: str, score: int, max_score: int = 10):
-    bar_filled = int((score / max_score) * 20)
-    bar_empty = 20 - bar_filled
-    color = Colors.GREEN if score >= 7 else Colors.YELLOW if score >= 4 else Colors.RED
-    print(f"  {dimension:22} [{color}{'█' * bar_filled}{Colors.DIM}{'░' * bar_empty}{Colors.RESET}] {color}{score:2}/{max_score}{Colors.RESET}")
+    color = Colors.GREEN if score >= 8 else Colors.YELLOW if score >= 5 else Colors.RED
+    bar_total = 20
+    bar_filled = int((score / max_score) * bar_total)
+    bar_empty = bar_total - bar_filled
+    print(f"  {dimension:22} [{color}{'#' * bar_filled}{Colors.DIM}{'-' * bar_empty}{Colors.RESET}] {color}{score:2}/{max_score}{Colors.RESET}")
 
 def print_reason(text: str):
     wrapped = text[:200] + "..." if len(text) > 200 else text
@@ -209,7 +216,7 @@ class AnthropicProvider(LLMProvider):
 class GeminiProvider(LLMProvider):
     def __init__(self, api_key: str, model: str = ""):
         self.api_key = api_key
-        self.model = model or "gemini-1.5-flash"
+        self.model = model or "gemini-2.5-flash"
 
     def name(self) -> str:
         return f"Gemini ({self.model})"
@@ -218,14 +225,18 @@ class GeminiProvider(LLMProvider):
         full_prompt = f"{system}\n\n{prompt}" if system else prompt
         body = json.dumps({
             "contents": [{"parts": [{"text": full_prompt}]}],
-            "generationConfig": {"temperature": 0.2, "maxOutputTokens": 1500}
+            "generationConfig": {"temperature": 0.2}
         }).encode("utf-8")
 
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent?key={self.api_key}"
         req = urlrequest.Request(url, data=body, headers={"Content-Type": "application/json"})
         resp = urlrequest.urlopen(req, timeout=TIMEOUT_LLM)
         data = json.loads(resp.read().decode("utf-8"))
-        return data["candidates"][0]["content"]["parts"][0]["text"]
+        candidate = data.get("candidates", [{}])[0]
+        finish_reason = candidate.get("finishReason", "UNKNOWN")
+        if finish_reason != "STOP":
+            print(f"[DEBUG] Gemini finishReason: {finish_reason}", flush=True)
+        return candidate.get("content", {}).get("parts", [{}])[0].get("text", "")
 
 
 class DeepSeekProvider(LLMProvider):
@@ -541,6 +552,7 @@ Score each dimension 0-10 with clear reasoning. Be STRICT."""
         """Parse LLM JSON response."""
         match = re.search(r'\{[\s\S]*\}', response)
         if not match:
+            print_warn(f"LLM Parse Error: No JSON found in response:\n{response}")
             return self._fallback_score(action)
 
         try:
@@ -938,18 +950,18 @@ def main():
         sys.exit(1)
 
     # Test LLM connection
-    print_info("Testing LLM connection...")
-    try:
-        test_response = llm.complete("Say 'ready' if you can hear me.", "You are a test assistant.")
-        if test_response:
-            print_success("LLM connected successfully")
-        else:
-            print_fail("LLM returned empty response")
-            sys.exit(1)
-    except Exception as e:
-        print_fail(f"LLM connection failed: {e}")
-        print_info("Check your API key and internet connection")
-        sys.exit(1)
+    # print_info("Testing LLM connection...")
+    # try:
+    #     test_response = llm.complete("Say 'ready' if you can hear me.", "You are a test assistant.")
+    #     if test_response:
+    #         print_success("LLM connected successfully")
+    #     else:
+    #         print_fail("LLM returned empty response")
+    #         sys.exit(1)
+    # except Exception as e:
+    #     print_fail(f"LLM connection failed: {e}")
+    #     print_info("Check your API key and internet connection")
+    #     sys.exit(1)
 
     # Run the judge
     judge = JudgeSimulator(llm)
